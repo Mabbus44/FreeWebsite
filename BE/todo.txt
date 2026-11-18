@@ -1,8 +1,23 @@
 in progress:
 
 done:
+* Added simulation settings to FE
+* Bug: Check why animals prefer to go to the left.
 
 to do:
+* Refactor program according to AI suggestions to spread the code currently in map.rs
+* Only record every x generation (and a list of generations to start out with).
+* Save each simulation in a dict
+* Get list of generations and their status/settings
+* Patch settings for a existing generation
+* Continue running existing generation
+* Change /simulation endpoint to start a generation (run in background).
+* Add endpoint to get list of simulations
+* Add endpoint to get status of one generation
+* Add endpoint to patch settings of generation
+* Add endpoint to continue running existing generation
+* Update FE to use the new integrations
+
 
 v 1.01
 * Refactor animal and map vectors
@@ -17,3 +32,40 @@ v 1.01
 
 v 1.0
 * Entities can move and eat
+
+
+
+Refactoring:
+
+recording:															map.rs:137, map.rs:282
+sensing/feature encoding:								map.rs:517, map.rs:527
+lifecycle/setup: 												map.rs:83, map.rs:107, map.rs:163, map.rs:191
+spawning/genetics wiring: 							map.rs:219
+movement/combat/death bookkeeping:			map.rs:342, map.rs:405, map.rs:464, map.rs:479
+
+Recording:
+	init_current_generation_recording
+	record_tick
+	complete_record/current_generation_record fields
+Into record.rs
+
+Sensing/input generation:
+	generate_input
+	generate_partial_input
+Into sensing.rs
+
+Generation lifecycle/policy
+	set_and_return_generation_over
+	start_new_generation
+	move_remaining_animals_to_best
+	reset (or split reset_world vs reset_generation)
+Into generation.rs
+
+Spawning/reproduction
+	generate_entities
+Into map/spawn.rs
+
+Keep in map.rs (coordinator role)
+Keep orchestration methods such as tick and high-level phase ordering:
+tick
+maybe calculate_actions (or delegate to a small action executor module later)
