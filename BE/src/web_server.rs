@@ -7,6 +7,7 @@ use serde::Serialize;
 use std::net::SocketAddr;
 use tokio::task;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use crate::simulation::Simulation;
 use crate::simulation::config::SimulationConfig;
 
@@ -24,6 +25,10 @@ pub async fn run() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/simulate", post(simulate).get(simulate_with_defaults))
+        .fallback_service(
+            ServeDir::new("../FE/dist")
+                .not_found_service(ServeFile::new("../FE/dist/index.html"))
+        )
         .layer(cors);
 
     let port = std::env::var("PORT")
