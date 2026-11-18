@@ -62,6 +62,7 @@ const OUTPUT_LABELS = ['WalkLeft', 'WalkRight', 'WalkUp', 'WalkDown', 'Eat', 'No
 const DEFAULT_SPEED = 4;
 const MIN_SPEED = 2;
 const CELL_SIZE = 14;
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:3000';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -544,7 +545,7 @@ export default function App() {
     setError(null);
 
     try {
-      const response = await fetch('http://127.0.0.1:3000/simulate');
+			const response = await fetch(`${API_URL}/simulate`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

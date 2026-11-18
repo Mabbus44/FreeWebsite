@@ -26,7 +26,12 @@ pub async fn run() {
         .route("/simulate", post(simulate).get(simulate_with_defaults))
         .layer(cors);
 
-    let address = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(3000);
+
+    let address = SocketAddr::from(([0, 0, 0, 0], port));
     println!("Listening on http://{address}");
 
     let listener = tokio::net::TcpListener::bind(address)
