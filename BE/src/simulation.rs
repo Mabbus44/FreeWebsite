@@ -16,7 +16,7 @@ pub struct Simulation {
 impl Simulation {
     pub fn new(config: SimulationConfig) -> Simulation {
         Simulation {
-            map: Map::new(config.map_config.clone(), config.generation_config.clone(), config.mutation_config.clone()),
+            map: Map::new(config.map_config.clone()),
             config,
             generation: 0,
             recording: Vec::new(),
@@ -24,7 +24,7 @@ impl Simulation {
     }
 
     pub fn simulate(&mut self){
-        while self.generation < self.config.generation_config.max_generation_count as usize {
+        while self.generation < self.config.max_generation_count as usize {
             if self.generation > 0 {
                 self.map.start_new_generation();
             }

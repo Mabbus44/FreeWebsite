@@ -1,15 +1,19 @@
 pub mod entity;
+pub mod generation_tracker;
+pub mod config;
 mod sensing;
 
 use rand::RngExt;
 use entity::EntityType;
 use entity::carnivore::Carnivore;
 use entity::herbivore::Herbivore;
-use entity::{Action, EntityRef, animal::Animal};
+use entity::{animal::Animal, Action, EntityRef};
+use entity::config::MutationConfig;
 use sensing::*;
 use std::{cmp, mem};
 use super::record::GenerationRecording;
-use super::config::*;
+use config::MapConfig;
+use generation_tracker::config::GenerationConfig;
 
 pub struct Map {
     animals: Vec<Vec<EntityRef>>,
@@ -42,9 +46,7 @@ pub struct Map {
 
 impl Map {
     pub fn new(
-        map_config: MapConfig,
-        generation_config: GenerationConfig,
-        mutation_config: MutationConfig
+        map_config: MapConfig
     ) -> Map {
         let mut map = Map {
             animals: vec![vec![EntityRef::None; map_config.size_x]; map_config.size_y],
@@ -68,8 +70,8 @@ impl Map {
             size_y: map_config.size_y,
             generation_over: false,
             record: map_config.record,
-            generation_config,
-            mutation_config,
+            generation_config: map_config.generation_config,
+            mutation_config: map_config.mutation_config,
             // Carnivore/Herbivore/Plant/Wall each has an input_side x input_side square of inputs, the centers are not included since it is occupied by the animal itself
             input_count: ((map_config.sense_radius * 2 + 1) * (map_config.sense_radius * 2 + 1) - 1) * 4,
             tick: 0,

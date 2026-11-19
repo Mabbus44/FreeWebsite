@@ -1,5 +1,5 @@
 use serde::Serialize;
-use crate::simulation::config::MutationConfig;
+use super::config::MutationConfig;
 use super::neuron::Neuron;
 use super::{Action, animal::Animal};
 

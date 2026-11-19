@@ -3,6 +3,7 @@ use serde::Serialize;
 pub mod herbivore;
 pub mod carnivore;
 pub mod animal;
+pub mod config;
 mod neuron;
 
 #[derive(Clone)]

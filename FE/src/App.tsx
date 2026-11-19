@@ -45,10 +45,11 @@ type MapConfig = {
   size_x: number;
   size_y: number;
   record: boolean;
+  generation_config: GenerationConfig;
+  mutation_config: MutationConfig;
 };
 
 type GenerationConfig = {
-  max_generation_count: number;
   max_ticks_per_generation: number;
   carnivore_count: number;
   herbivore_count: number;
@@ -65,8 +66,7 @@ type MutationConfig = {
 
 type SimulationConfig = {
   map_config: MapConfig;
-  generation_config: GenerationConfig;
-  mutation_config: MutationConfig;
+  max_generation_count: number;
 };
 
 type Species = 'carnivore' | 'herbivore';
@@ -108,22 +108,22 @@ const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
     herbivore_max_energy: 50,
     size_x: 200,
     size_y: 100,
-    record: true
+    record: true,
+    generation_config: {
+      max_ticks_per_generation: 1000,
+      carnivore_count: 2,
+      herbivore_count: 2,
+      grass_count: -1,
+      best_carnivore_count: 2,
+      best_herbivore_count: 2,
+      all_entities_must_be_under_min_levels: true
+    },
+    mutation_config: {
+      mutation_chance: 0.01,
+      max_mutation_amount: 0.3
+    }
   },
-  generation_config: {
-    max_generation_count: 50,
-    max_ticks_per_generation: 1000,
-    carnivore_count: 2,
-    herbivore_count: 2,
-    grass_count: -1,
-    best_carnivore_count: 2,
-    best_herbivore_count: 2,
-    all_entities_must_be_under_min_levels: true
-  },
-  mutation_config: {
-    mutation_chance: 0.01,
-    max_mutation_amount: 0.3
-  }
+  max_generation_count: 50
 };
 
 const DEFAULT_SPEED = 4;
@@ -173,22 +173,24 @@ const parseSimulationConfigCookie = (): SimulationConfig => {
 
   try {
     const parsed = JSON.parse(decodeURIComponent(encodedValue)) as Partial<SimulationConfig>;
-    if (!parsed.map_config || !parsed.generation_config || !parsed.mutation_config) {
+    if (!parsed.map_config) {
       return cloneDefaultConfig();
     }
 
     return {
+      ...DEFAULT_SIMULATION_CONFIG,
+      ...parsed,
       map_config: {
         ...DEFAULT_SIMULATION_CONFIG.map_config,
-        ...parsed.map_config
-      },
-      generation_config: {
-        ...DEFAULT_SIMULATION_CONFIG.generation_config,
-        ...parsed.generation_config
-      },
-      mutation_config: {
-        ...DEFAULT_SIMULATION_CONFIG.mutation_config,
-        ...parsed.mutation_config
+        ...parsed.map_config,
+          generation_config: {
+            ...DEFAULT_SIMULATION_CONFIG.map_config.generation_config,
+            ...parsed.map_config.generation_config
+          },
+          mutation_config: {
+            ...DEFAULT_SIMULATION_CONFIG.map_config.mutation_config,
+            ...parsed.map_config.mutation_config
+          }
       }
     };
   } catch {
@@ -699,9 +701,12 @@ export default function App() {
   const updateGenerationConfig = (key: keyof GenerationConfig, value: number | boolean) => {
     setSimulationConfig((current) => ({
       ...current,
-      generation_config: {
-        ...current.generation_config,
-        [key]: value
+      map_config: {
+        ...current.map_config,
+        generation_config: {
+          ...current.map_config.generation_config,
+          [key]: value
+        }
       }
     }));
   };
@@ -709,9 +714,12 @@ export default function App() {
   const updateMutationConfig = (key: keyof MutationConfig, value: number) => {
     setSimulationConfig((current) => ({
       ...current,
-      mutation_config: {
-        ...current.mutation_config,
-        [key]: value
+      map_config: {
+        ...current.map_config,
+        mutation_config: {
+          ...current.map_config.mutation_config,
+          [key]: value
+        }
       }
     }));
   };
@@ -1031,9 +1039,9 @@ export default function App() {
               Max Generation Count
               <input
                 type="number"
-                value={simulationConfig.generation_config.max_generation_count}
+                value={simulationConfig.max_generation_count}
                 onChange={(event) =>
-                  updateGenerationConfig('max_generation_count', Number(event.target.value))
+                  setSimulationConfig((current) => ({ ...current, max_generation_count: Number(event.target.value) }))
                 }
               />
             </label>
@@ -1041,7 +1049,7 @@ export default function App() {
               Max Ticks Per Generation
               <input
                 type="number"
-                value={simulationConfig.generation_config.max_ticks_per_generation}
+                value={simulationConfig.map_config.generation_config.max_ticks_per_generation}
                 onChange={(event) =>
                   updateGenerationConfig('max_ticks_per_generation', Number(event.target.value))
                 }
@@ -1051,7 +1059,7 @@ export default function App() {
               Carnivore Count
               <input
                 type="number"
-                value={simulationConfig.generation_config.carnivore_count}
+                value={simulationConfig.map_config.generation_config.carnivore_count}
                 onChange={(event) =>
                   updateGenerationConfig('carnivore_count', Number(event.target.value))
                 }
@@ -1061,7 +1069,7 @@ export default function App() {
               Herbivore Count
               <input
                 type="number"
-                value={simulationConfig.generation_config.herbivore_count}
+                value={simulationConfig.map_config.generation_config.herbivore_count}
                 onChange={(event) =>
                   updateGenerationConfig('herbivore_count', Number(event.target.value))
                 }
@@ -1071,7 +1079,7 @@ export default function App() {
               Grass Count
               <input
                 type="number"
-                value={simulationConfig.generation_config.grass_count}
+                value={simulationConfig.map_config.generation_config.grass_count}
                 onChange={(event) => updateGenerationConfig('grass_count', Number(event.target.value))}
               />
             </label>
@@ -1079,7 +1087,7 @@ export default function App() {
               Best Carnivore Count
               <input
                 type="number"
-                value={simulationConfig.generation_config.best_carnivore_count}
+                value={simulationConfig.map_config.generation_config.best_carnivore_count}
                 onChange={(event) =>
                   updateGenerationConfig('best_carnivore_count', Number(event.target.value))
                 }
@@ -1089,7 +1097,7 @@ export default function App() {
               Best Herbivore Count
               <input
                 type="number"
-                value={simulationConfig.generation_config.best_herbivore_count}
+                value={simulationConfig.map_config.generation_config.best_herbivore_count}
                 onChange={(event) =>
                   updateGenerationConfig('best_herbivore_count', Number(event.target.value))
                 }
@@ -1098,7 +1106,7 @@ export default function App() {
             <label className="checkbox-field">
               <input
                 type="checkbox"
-                checked={simulationConfig.generation_config.all_entities_must_be_under_min_levels}
+                checked={simulationConfig.map_config.generation_config.all_entities_must_be_under_min_levels}
                 onChange={(event) =>
                   updateGenerationConfig('all_entities_must_be_under_min_levels', event.target.checked)
                 }
@@ -1114,7 +1122,7 @@ export default function App() {
               <input
                 type="number"
                 step="0.001"
-                value={simulationConfig.mutation_config.mutation_chance}
+                value={simulationConfig.map_config.mutation_config.mutation_chance}
                 onChange={(event) =>
                   updateMutationConfig('mutation_chance', Number(event.target.value))
                 }
@@ -1125,7 +1133,7 @@ export default function App() {
               <input
                 type="number"
                 step="0.001"
-                value={simulationConfig.mutation_config.max_mutation_amount}
+                value={simulationConfig.map_config.mutation_config.max_mutation_amount}
                 onChange={(event) =>
                   updateMutationConfig('max_mutation_amount', Number(event.target.value))
                 }
