@@ -1,9 +1,9 @@
 pub mod entity;
-pub mod generation_tracker;
+pub mod generation;
 pub mod config;
 mod sensing;
+pub mod spawning;
 
-use rand::RngExt;
 use entity::EntityType;
 use entity::carnivore::Carnivore;
 use entity::herbivore::Herbivore;
@@ -13,7 +13,7 @@ use sensing::*;
 use std::{cmp, mem};
 use super::record::GenerationRecording;
 use config::MapConfig;
-use generation_tracker::config::GenerationConfig;
+use generation::config::GenerationConfig;
 
 pub struct Map {
     animals: Vec<Vec<EntityRef>>,
@@ -86,29 +86,6 @@ impl Map {
         map
     }
 
-    pub fn start_new_generation(&mut self) {
-        if !self.generation_over {
-            panic!("Tried to start a new generation before the old one was over");
-        }
-        self.tick = 0;
-        self.carnivore_count = 0;
-        self.herbivore_count = 0;
-        self.grass_count = 0;
-        self.generation_over = false;
-        self.plants = vec![vec![EntityRef::None; self.size_x]; self.size_y];
-        self.animals = vec![vec![EntityRef::None; self.size_x]; self.size_y];
-        self.carnivores = Vec::with_capacity(self.carnivore_start_count as usize);
-        self.herbivores = Vec::with_capacity(self.herbivore_start_count as usize);
-        self.generate_entities(self.carnivore_start_count, EntityType::Carnivore, true);
-        self.generate_entities(self.herbivore_start_count, EntityType::Herbivore, true);
-        self.generate_entities(self.grass_start_count, EntityType::Grass, true);
-        self.best_carnivores = Vec::new();
-        self.best_herbivores = Vec::new();
-        if self.record {
-            self.recording = Some(GenerationRecording::new(self));
-        }
-    }
-
     pub fn get_carnivores(&self) -> &Vec::<Option<Carnivore>> {
         &self.carnivores
     }
@@ -126,111 +103,14 @@ impl Map {
     }
 
     fn move_remaining_animals_to_best(&mut self) {
-        let mut id: u32 = 0;
-        while self.herbivore_count > 0 && self.best_herbivores.len() < self.generation_config.best_herbivore_count as usize && id < self.herbivores.len() as u32 {
-            match &self.herbivores[id as usize] {
-                Some(herbivore) => {
-                    self.best_herbivores.push(herbivore.clone());
-                    self.herbivore_count -= 1;
-                }
-                None => {}
-            }
-            id += 1;
-        }
-        id = 0;
-        while self.carnivore_count > 0 && self.best_carnivores.len() < self.generation_config.best_carnivore_count as usize && id < self.carnivores.len() as u32  {
-            match &self.carnivores[id as usize] {
-                Some(carnivore) => {
-                    self.best_carnivores.push(carnivore.clone());
-                    self.carnivore_count -= 1;
-                }
-                None => {}
-            }
-            id += 1;
-        }
+        generation::move_best_animals(&mut self.herbivores, &mut self.best_herbivores, &mut self.herbivore_count, self.generation_config.best_herbivore_count);
+        generation::move_best_animals(&mut self.carnivores, &mut self.best_carnivores, &mut self.carnivore_count, self.generation_config.best_carnivore_count);
         if self.best_carnivores.len() == 0 || self.best_herbivores.len() == 0 {
             panic!("Best carnivores or herbivores is empty");
         }
     }
 
-    pub fn handle_and_return_generation_over(&mut self) -> bool {
-        let old_val = self.generation_over;
-        if self.generation_config.max_ticks_per_generation >= 0 && self.tick >= self.generation_config.max_ticks_per_generation as usize {
-            self.generation_over = true;
-        }
-        if self.generation_config.all_entities_must_be_under_min_levels {
-            if (self.generation_config.carnivore_count >= 0 && self.carnivore_count as i32 <= self.generation_config.carnivore_count) &&
-                (self.generation_config.herbivore_count >= 0 && self.herbivore_count as i32 <= self.generation_config.herbivore_count) &&
-                (self.generation_config.grass_count >= 0 && self.grass_count as i32 <= self.generation_config.grass_count) {
-                self.generation_over = true;
-            }
-        } else {
-            if (self.generation_config.carnivore_count >= 0 && self.carnivore_count as i32 <= self.generation_config.carnivore_count) ||
-                (self.generation_config.herbivore_count >= 0 && self.herbivore_count as i32 <= self.generation_config.herbivore_count) ||
-                (self.generation_config.grass_count >= 0 && self.grass_count as i32 <= self.generation_config.grass_count) {
-                self.generation_over = true;
-            }
-        }
-        if !old_val && self.generation_over {
-            self.move_remaining_animals_to_best();
-        }
-        self.generation_over
-    }
-
-    fn generate_entities(&mut self, entity_count: u32, entity_type: EntityType, from_best: bool) {
-        for _ in 0..entity_count {
-            let mut retries: u8 = 0;
-            while retries < 3 {
-                let pos_x = rand::rng().random_range(0..self.size_x);
-                let pos_y = rand::rng().random_range(0..self.size_y);
-                let mut is_free = false;
-                match entity_type {
-                    EntityType::Herbivore | EntityType::Carnivore => {
-                        is_free = matches!(self.animals[pos_y][pos_x], EntityRef::None);
-                    }
-                    EntityType::Grass => {
-                        is_free = matches!(self.plants[pos_y][pos_x], EntityRef::None);
-                    }
-                    _ => {}
-                }
-                if is_free {
-                    match entity_type {
-                        EntityType::Grass => {
-                            self.plants[pos_y][pos_x] = EntityRef::Grass;
-                            self.grass_count += 1;
-                        }
-                        EntityType::Herbivore => {
-                            self.animals[pos_y][pos_x] = EntityRef::Herbivore(self.herbivores.len());
-                            if from_best {
-                                let best_id = rand::rng().random_range(0..self.best_herbivores.len());
-                                self.herbivores.push(Some(Herbivore::new_from_parent(&self.mutation_config, &self.best_herbivores[best_id], self.herbivore_max_energy, pos_x, pos_y)));
-                            } else {
-                                self.herbivores.push(Some(Herbivore::new(self.input_count, self.neuron_count, self.neuron_layer_count, self.herbivore_max_energy, pos_x, pos_y)));
-                            }
-                            self.herbivore_count += 1;
-                        }
-                        EntityType::Carnivore => {
-                            self.animals[pos_y][pos_x] = EntityRef::Carnivore(self.carnivores.len());
-                            if from_best {
-                                let best_id = rand::rng().random_range(0..self.best_carnivores.len());
-                                self.carnivores.push(Some(Carnivore::new_from_parent(&self.mutation_config, &self.best_carnivores[best_id], self.carnivore_max_energy, pos_x, pos_y)));
-                            } else {
-                                self.carnivores.push(Some(Carnivore::new(self.input_count, self.neuron_count, self.neuron_layer_count, self.carnivore_max_energy, pos_x, pos_y)));
-                            }
-                            self.carnivore_count += 1;
-                        }
-                        _ => {}
-                    }
-                    break;
-                }
-                else {
-                    retries += 1;
-                }
-            }
-        }
-    }
-
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> bool {
         self.calculate_actions();
         if self.record {
             self.recording.as_mut().unwrap().record_tick(&self.carnivores, &self.herbivores);
@@ -238,6 +118,7 @@ impl Map {
         self.take_eat_actions();
         self.take_other_actions();
         self.tick += 1;
+        self.set_generation_over()
     }
 
     #[allow(dead_code)]

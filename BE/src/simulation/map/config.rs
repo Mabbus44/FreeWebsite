@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use super::entity::config::MutationConfig;
-use super::generation_tracker::config::GenerationConfig;
+use super::generation::config::GenerationConfig;
 #[derive(Clone)]
 #[derive(Deserialize)]
 pub struct MapConfig {

@@ -28,9 +28,7 @@ impl Simulation {
             if self.generation > 0 {
                 self.map.start_new_generation();
             }
-            while !self.map.handle_and_return_generation_over() {
-                self.map.tick();
-            }
+            while !self.map.tick() {}
             if self.config.map_config.record {
                 self.recording.push(self.map.get_recording().unwrap());
             }
