@@ -14,6 +14,7 @@ pub enum EntityRef {
     None
 }
 
+#[derive(Clone)]
 pub enum EntityType {
     Grass,
     Herbivore,
@@ -21,7 +22,7 @@ pub enum EntityType {
     None
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[derive(Serialize)]
 pub enum Action {
     WalkLeft,

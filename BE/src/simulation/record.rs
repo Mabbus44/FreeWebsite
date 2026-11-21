@@ -52,7 +52,7 @@ impl GenerationRecording {
                     let pos = carnivore.get_position();
                     temp_animal_record = Some(AnimalRecord {
                         energy: carnivore.get_energy(),
-                        action: carnivore.get_action_ref_immutable().clone(),
+                        action: carnivore.get_action(),
                         pos_x: pos.0,
                         pos_y: pos.1,
                     });
@@ -69,7 +69,7 @@ impl GenerationRecording {
                     let pos = herbivore.get_position();
                     temp_animal_record = Some(AnimalRecord {
                         energy: herbivore.get_energy(),
-                        action: herbivore.get_action_ref_immutable().clone(),
+                        action: herbivore.get_action(),
                         pos_x: pos.0,
                         pos_y: pos.1,
                     });

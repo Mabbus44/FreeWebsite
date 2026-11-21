@@ -2,18 +2,15 @@ pub mod entity;
 pub mod generation;
 pub mod config;
 mod sensing;
-pub mod spawning;
+mod spawning;
 
 use entity::EntityType;
 use entity::carnivore::Carnivore;
 use entity::herbivore::Herbivore;
 use entity::{animal::Animal, Action, EntityRef};
-use entity::config::MutationConfig;
-use sensing::*;
 use std::{cmp, mem};
 use super::record::GenerationRecording;
 use config::MapConfig;
-use generation::config::GenerationConfig;
 
 pub struct Map {
     animals: Vec<Vec<EntityRef>>,
@@ -22,67 +19,36 @@ pub struct Map {
     herbivores: Vec<Option<Herbivore>>,
     best_carnivores: Vec<Carnivore>,
     best_herbivores: Vec<Herbivore>,
-    carnivore_start_count: u32,
-    herbivore_start_count: u32,
-    grass_start_count: u32,
     carnivore_count: u32,
     herbivore_count: u32,
     grass_count: u32,
-    neuron_count: usize,
-    neuron_layer_count: usize,
-    sense_radius: usize,
-    carnivore_max_energy: u32,
-    herbivore_max_energy: u32,
-    input_count: usize,
-    size_x: usize,
-    size_y: usize,
     tick: usize,
     generation_over: bool,
-    record: bool,
+    input_count: usize,
     recording: Option<GenerationRecording>,
-    generation_config: GenerationConfig,
-    mutation_config: MutationConfig
+    map_config: MapConfig,
 }
 
 impl Map {
-    pub fn new(
-        map_config: MapConfig
-    ) -> Map {
+    pub fn new(map_config: MapConfig) -> Self {
         let mut map = Map {
-            animals: vec![vec![EntityRef::None; map_config.size_x]; map_config.size_y],
-            plants: vec![vec![EntityRef::None; map_config.size_x]; map_config.size_y],
-            carnivores: Vec::with_capacity(map_config.carnivore_count as usize),
-            herbivores: Vec::with_capacity(map_config.herbivore_count as usize),
+            animals: Vec::new(),
+            plants: Vec::new(),
+            carnivores: Vec::new(),
+            herbivores: Vec::new(),
             best_carnivores: Vec::new(),
             best_herbivores: Vec::new(),
-            carnivore_start_count: map_config.carnivore_count,
-            herbivore_start_count: map_config.herbivore_count,
-            grass_start_count: map_config.grass_count,
             carnivore_count: 0,
             herbivore_count: 0,
             grass_count: 0,
-            neuron_count: map_config.neuron_count,
-            neuron_layer_count: map_config.neuron_layer_count,
-            sense_radius: map_config.sense_radius,
-            carnivore_max_energy: map_config.carnivore_max_energy,
-            herbivore_max_energy: map_config.herbivore_max_energy,
-            size_x: map_config.size_x,
-            size_y: map_config.size_y,
             generation_over: false,
-            record: map_config.record,
-            generation_config: map_config.generation_config,
-            mutation_config: map_config.mutation_config,
             // Carnivore/Herbivore/Plant/Wall each has an input_side x input_side square of inputs, the centers are not included since it is occupied by the animal itself
             input_count: ((map_config.sense_radius * 2 + 1) * (map_config.sense_radius * 2 + 1) - 1) * 4,
             tick: 0,
             recording: None,
+            map_config
         };
-        map.generate_entities(map.carnivore_start_count, EntityType::Carnivore, false);
-        map.generate_entities(map.herbivore_start_count, EntityType::Herbivore, false);
-        map.generate_entities(map.grass_start_count, EntityType::Grass, false);
-        if map.record {
-            map.recording = Some(GenerationRecording::new(&map));
-        }
+        map.init_generation(false);
         map
     }
 
@@ -103,20 +69,19 @@ impl Map {
     }
 
     fn move_remaining_animals_to_best(&mut self) {
-        generation::move_best_animals(&mut self.herbivores, &mut self.best_herbivores, &mut self.herbivore_count, self.generation_config.best_herbivore_count);
-        generation::move_best_animals(&mut self.carnivores, &mut self.best_carnivores, &mut self.carnivore_count, self.generation_config.best_carnivore_count);
-        if self.best_carnivores.len() == 0 || self.best_herbivores.len() == 0 {
+        generation::move_best_animals(&mut self.herbivores, &mut self.best_herbivores, &mut self.herbivore_count, self.map_config.generation_config.best_herbivore_count);
+        generation::move_best_animals(&mut self.carnivores, &mut self.best_carnivores, &mut self.carnivore_count, self.map_config.generation_config.best_carnivore_count);
+        if self.best_carnivores.is_empty() || self.best_herbivores.is_empty() {
             panic!("Best carnivores or herbivores is empty");
         }
     }
 
     pub fn tick(&mut self) -> bool {
         self.calculate_actions();
-        if self.record {
+        if self.map_config.record {
             self.recording.as_mut().unwrap().record_tick(&self.carnivores, &self.herbivores);
         }
-        self.take_eat_actions();
-        self.take_other_actions();
+        self.take_actions();
         self.tick += 1;
         self.set_generation_over()
     }
@@ -125,148 +90,103 @@ impl Map {
     pub fn get_tick_count(&self) -> usize { self.tick }
 
     pub fn calculate_actions(&mut self) {
-        for i in 0..self.carnivores.len()  {
-            if self.carnivores[i].is_none() {
-                continue;
-            }
-            let (x, y) = self.carnivores[i].as_ref().unwrap().get_position();
-            let input = generate_input(&self.animals, self.sense_radius, x as i32, y as i32);
-            self.carnivores[i].as_mut().unwrap().calculate_action(input);
-        }
-        for i in 0..self.herbivores.len()  {
-            if self.herbivores[i].is_none() {
-                continue;
-            }
-            let (x, y) = self.herbivores[i].as_ref().unwrap().get_position();
-            let input = generate_input(&self.animals, self.sense_radius, x as i32, y as i32);
-            self.herbivores[i].as_mut().unwrap().calculate_action(input);
+        Self::calculate_actions_for(&(self.animals), self.map_config.sense_radius, &mut self.carnivores);
+        Self::calculate_actions_for(&(self.animals), self.map_config.sense_radius, &mut self.herbivores);
+    }
+
+    fn calculate_actions_for<A: Animal>(animals_grid: &Vec<Vec<EntityRef>>, sense_radius: usize, list: &mut [Option<A>]){
+        for animal in list.iter_mut().flatten() {
+            let (x, y) = animal.get_position();
+            let input = sensing::generate_input(animals_grid, sense_radius, x as i32, y as i32);
+            animal.calculate_action(input);
         }
     }
 
-    pub fn take_eat_actions(&mut self) {
+    fn take_actions(&mut self) {
         for i in 0..self.carnivores.len() {
-            if self.carnivores[i].is_none() {
-                continue;
-            }
-            let (x, y) = self.carnivores[i].as_ref().unwrap().get_position();
-            if matches!(self.carnivores[i].as_ref().unwrap().get_action_ref_immutable(), Action::Eat) {
-                if self.take_eat_action(x as i32, y as i32, EntityType::Herbivore) {
-                    self.carnivores[i].as_mut().unwrap().take_eat_action();
-                } else {
-                    self.carnivores[i].as_mut().unwrap().add_to_energy(-1);
+            let (x, y, action) = match &self.carnivores[i] {
+                Some(carnivore) => {
+                    let (x, y) = carnivore.get_position();
+                    (x, y, carnivore.get_action())
                 }
-                if self.carnivores[i].as_ref().unwrap().get_energy() <= 0 {
-                    self.kill_animal_by_id(i, EntityType::Carnivore);
-                }
-            }
-        }
-        for i in 0..self.herbivores.len() {
-            if self.herbivores[i].is_none() {
-                continue;
-            }
-            let (x, y) = self.herbivores[i].as_ref().unwrap().get_position();
-            if matches!(self.herbivores[i].as_ref().unwrap().get_action_ref_immutable(), Action::Eat) {
-                if self.take_eat_action(x as i32, y as i32, EntityType::Grass) {
-                    self.herbivores[i].as_mut().unwrap().take_eat_action();
-                } else {
-                    self.herbivores[i].as_mut().unwrap().add_to_energy(-1);
-                }
-                if self.herbivores[i].as_ref().unwrap().get_energy() <= 0 {
-                    self.kill_animal_by_id(i, EntityType::Herbivore);
-                }
-            }
-        }
-    }
-
-    pub fn take_eat_action(&mut self, x_in: i32, y_in: i32, entity_type: EntityType) -> bool{
-        let eat_range = 2;
-        let x_min = cmp::max(x_in - eat_range, 0) as usize;
-        let x_max = cmp::min(x_in + eat_range + 1, self.size_x as i32) as usize;
-        let y_min = cmp::max(y_in - eat_range, 0) as usize;
-        let y_max = cmp::min(y_in + eat_range + 1, self.size_y as i32) as usize;
-        for y in y_min..y_max {
-            for x in x_min..x_max {
-                if x == x_in as usize && y == y_in as usize {
-                    continue;
-                }
-                if matches!(entity_type, EntityType::Herbivore) && let EntityRef::Herbivore(_) = &self.animals[y][x] {
-                    self.kill_animal_by_pos(x, y);
-                    return true;
-                }
-                if matches!(entity_type, EntityType::Grass) && matches!(self.plants[y][x], EntityRef::Grass) {
-                    if self.record && self.recording.is_some() {
-                        self.recording.as_mut().unwrap().add_dead_grass(self.tick, x, y);
-                    }
-                    self.plants[y][x] = EntityRef::None;
-                    self.grass_count -= 1;
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    pub fn take_other_actions(&mut self) {
-        for i in 0..self.carnivores.len() {
-            if self.carnivores[i].is_none() {
-                continue;
-            }
-            let (x, y) = self.carnivores[i].as_ref().unwrap().get_position();
-            let action = self.carnivores[i].as_ref().unwrap().get_action_ref_immutable().clone();
-            if self.take_other_action(x, y, action) {
-                self.carnivores[i].as_mut().unwrap().take_other_action();
-            } else {
-                self.carnivores[i].as_mut().unwrap().add_to_energy(-1);
-            }
-            if self.carnivores[i].as_ref().unwrap().get_energy() <= 0 {
+                None => continue,
+            };
+            let success = self.take_action(EntityType::Herbivore, x, y, action);
+            if !self.carnivores[i].as_mut().unwrap().take_action(success) {
                 self.kill_animal_by_id(i, EntityType::Carnivore);
             }
         }
         for i in 0..self.herbivores.len() {
-            if self.herbivores[i].is_none() {
-                continue;
-            }
-            let (x, y) = self.herbivores[i].as_ref().unwrap().get_position();
-            let action = self.herbivores[i].as_ref().unwrap().get_action_ref_immutable().clone();
-            if self.take_other_action(x, y, action) {
-                self.herbivores[i].as_mut().unwrap().take_other_action();
-            } else {
-                self.herbivores[i].as_mut().unwrap().add_to_energy(-1);
-            }
-            if self.herbivores[i].as_ref().unwrap().get_energy() <= 0 {
+            let (x, y, action) = match &self.herbivores[i] {
+                Some(herbivore) => {
+                    let (x, y) = herbivore.get_position();
+                    (x, y, herbivore.get_action())
+                }
+                None => continue,
+            };
+            let success = self.take_action(EntityType::Grass, x, y, action);
+            if !self.herbivores[i].as_mut().unwrap().take_action(success) {
                 self.kill_animal_by_id(i, EntityType::Herbivore);
             }
         }
     }
 
-    pub fn take_other_action(&mut self, x: usize, y: usize, action: Action) -> bool {
+    // Return true = valid action, map part of action performed. False = invalid action, nothing done
+    fn take_action(&mut self, food_type: EntityType, x_in: usize, y_in: usize, action: Action) -> bool {
         match action {
             Action::WalkDown => {
-                if y == 0 {
+                if y_in == 0 {
                     return false;
                 }
-                return self.move_animal(x, y, x, y - 1);
+                self.move_animal(x_in, y_in, x_in, y_in - 1)
             }
             Action::WalkUp => {
-                return self.move_animal(x, y, x, y + 1);
+                self.move_animal(x_in, y_in, x_in, y_in + 1)
             }
             Action::WalkLeft => {
-                if x == 0 {
+                if x_in == 0 {
                     return false;
                 }
-                return self.move_animal(x, y, x - 1, y);
+                self.move_animal(x_in, y_in, x_in - 1, y_in)
             }
             Action::WalkRight => {
-                return self.move_animal(x, y, x + 1, y);
+                self.move_animal(x_in, y_in, x_in + 1, y_in)
             }
-            Action::None => {}
-            Action::Eat => {}
+            Action::Eat => {
+                let eat_range: i32 = 2;
+                let x_min = cmp::max(x_in as i32 - eat_range, 0) as usize;
+                let x_max = cmp::min(x_in as i32 + eat_range + 1, self.map_config.size_x as i32) as usize;
+                let y_min = cmp::max(y_in as i32 - eat_range, 0) as usize;
+                let y_max = cmp::min(y_in as i32 + eat_range + 1, self.map_config.size_y as i32) as usize;
+                for y in y_min..y_max {
+                    for x in x_min..x_max {
+                        if x == x_in as usize && y == y_in as usize {
+                            continue;
+                        }
+                        if matches!(food_type, EntityType::Herbivore) && let EntityRef::Herbivore(_) = &self.animals[y][x] {
+                            self.kill_animal_by_pos(x, y);
+                            return true;
+                        }
+                        if matches!(food_type, EntityType::Grass) && matches!(self.plants[y][x], EntityRef::Grass) {
+                            if self.map_config.record && let Some(recording) = self.recording.as_mut() {
+                                recording.add_dead_grass(self.tick, x, y);
+                            }
+                            self.plants[y][x] = EntityRef::None;
+                            self.grass_count -= 1;
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            Action::None => {
+                true
+            }
         }
-        false
     }
 
     pub fn move_animal(&mut self, from_x: usize, from_y: usize, to_x: usize, to_y: usize) -> bool {
-        if to_x >= self.size_x || to_y >= self.size_y ||
+        if to_x >= self.map_config.size_x || to_y >= self.map_config.size_y ||
             !matches!(self.animals[to_y][to_x], EntityRef::None) || matches!(self.animals[from_y][from_x], EntityRef::None) {
             return false;
         }
@@ -283,7 +203,7 @@ impl Map {
     pub fn kill_animal_by_pos(&mut self, x: usize, y: usize) {
         match self.animals[y][x] {
             EntityRef::Herbivore(id) => {
-                if self.herbivore_count <= self.generation_config.best_herbivore_count {
+                if self.herbivore_count <= self.map_config.generation_config.best_herbivore_count {
                     self.best_herbivores.push(self.herbivores[id].as_ref().unwrap().clone());
                 }
                 self.animals[y][x] = EntityRef::None;
@@ -291,7 +211,7 @@ impl Map {
                 self.herbivore_count -= 1;
             }
             EntityRef::Carnivore(id) => {
-                if self.carnivore_count <= self.generation_config.best_carnivore_count {
+                if self.carnivore_count <= self.map_config.generation_config.best_carnivore_count {
                     self.best_carnivores.push(self.carnivores[id].as_ref().unwrap().clone());
                 }
                 self.animals[y][x] = EntityRef::None;
@@ -320,9 +240,9 @@ impl Map {
 
     pub fn to_string(&self) -> String {
         let mut ret : String = "".to_string();
-        for y in 0..self.size_y {
+        for y in 0..self.map_config.size_y {
             let mut row : String = "".to_string();
-            for x in 0..self.size_x {
+            for x in 0..self.map_config.size_x {
                 match &self.animals[y][x] {
                     EntityRef::Carnivore(_) => {
                         row.push('X');
@@ -332,11 +252,12 @@ impl Map {
                     }
                     EntityRef::Grass => {}
                     EntityRef::None => {
-                        row.push(' ');
+                        if matches!(&self.plants[y][x], EntityRef::Grass) {
+                            row.push('.');
+                        } else {
+                            row.push(' ');
+                        }
                     }
-                }
-                if matches!(&self.plants[y][x], EntityRef::Grass) {
-                    row.push('.');
                 }
             }
             ret.push_str(&row);
@@ -345,8 +266,8 @@ impl Map {
         ret
     }
     
-    pub fn get_recording(&self) -> Option<GenerationRecording> {
-        self.recording.clone()
+    pub fn get_recording(&mut self) -> Option<GenerationRecording> {
+        self.recording.take()
     }
 }
 

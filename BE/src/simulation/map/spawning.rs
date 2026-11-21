@@ -9,8 +9,8 @@ impl Map {
         for _ in 0..entity_count {
             let mut retries: u8 = 0;
             while retries < 3 {
-                let pos_x = rand::rng().random_range(0..self.size_x);
-                let pos_y = rand::rng().random_range(0..self.size_y);
+                let pos_x = rand::rng().random_range(0..self.map_config.size_x);
+                let pos_y = rand::rng().random_range(0..self.map_config.size_y);
                 let mut is_free = false;
                 match entity_type {
                     EntityType::Herbivore | EntityType::Carnivore => {
@@ -31,9 +31,9 @@ impl Map {
                             self.animals[pos_y][pos_x] = EntityRef::Herbivore(self.herbivores.len());
                             if from_best {
                                 let best_id = rand::rng().random_range(0..self.best_herbivores.len());
-                                self.herbivores.push(Some(Herbivore::new_from_parent(&self.mutation_config, &self.best_herbivores[best_id], self.herbivore_max_energy, pos_x, pos_y)));
+                                self.herbivores.push(Some(Herbivore::new_from_parent(&self.map_config.mutation_config, &self.best_herbivores[best_id], self.map_config.herbivore_max_energy, pos_x, pos_y)));
                             } else {
-                                self.herbivores.push(Some(Herbivore::new(self.input_count, self.neuron_count, self.neuron_layer_count, self.herbivore_max_energy, pos_x, pos_y)));
+                                self.herbivores.push(Some(Herbivore::new(self.input_count, self.map_config.neuron_count, self.map_config.neuron_layer_count, self.map_config.herbivore_max_energy, pos_x, pos_y)));
                             }
                             self.herbivore_count += 1;
                         }
@@ -41,9 +41,9 @@ impl Map {
                             self.animals[pos_y][pos_x] = EntityRef::Carnivore(self.carnivores.len());
                             if from_best {
                                 let best_id = rand::rng().random_range(0..self.best_carnivores.len());
-                                self.carnivores.push(Some(Carnivore::new_from_parent(&self.mutation_config, &self.best_carnivores[best_id], self.carnivore_max_energy, pos_x, pos_y)));
+                                self.carnivores.push(Some(Carnivore::new_from_parent(&self.map_config.mutation_config, &self.best_carnivores[best_id], self.map_config.carnivore_max_energy, pos_x, pos_y)));
                             } else {
-                                self.carnivores.push(Some(Carnivore::new(self.input_count, self.neuron_count, self.neuron_layer_count, self.carnivore_max_energy, pos_x, pos_y)));
+                                self.carnivores.push(Some(Carnivore::new(self.input_count, self.map_config.neuron_count, self.map_config.neuron_layer_count, self.map_config.carnivore_max_energy, pos_x, pos_y)));
                             }
                             self.carnivore_count += 1;
                         }

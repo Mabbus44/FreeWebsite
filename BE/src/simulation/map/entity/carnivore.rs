@@ -39,18 +39,20 @@ impl Animal for Carnivore {
     fn get_action_ref_mut(&mut self) -> &mut Action {
         &mut self.action
     }
-    fn get_action_ref_immutable(&self) -> &Action { &self.action }
+    fn get_action(&self) -> Action { self.action }
     fn get_energy(&self) -> i32 {
         self.energy
     }
     fn set_energy(&mut self, energy: i32){
         self.energy = energy;
     }
-    fn add_to_energy(&mut self, energy: i32){
+    fn add_to_energy(&mut self, energy: i32) -> bool {
         self.energy += energy;
-        if self.energy < 0 {
+        if self.energy <= 0 {
             self.energy = 0;
+            return false;
         }
+        true
     }
     fn set_position(&mut self, x: usize, y: usize){
         self.pos_x = x;

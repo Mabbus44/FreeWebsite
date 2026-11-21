@@ -7,27 +7,28 @@ pub trait Animal {
     #[allow(dead_code)]
     fn get_neurons_ref_immutable(& self) -> &Vec<Vec<Neuron>>;
     fn get_action_ref_mut(&mut self) -> &mut Action;
-    fn get_action_ref_immutable(&self) -> &Action;
+    fn get_action(&self) -> Action;
     fn get_energy(&self) -> i32;
     fn set_energy(&mut self, energy: i32);
-    fn add_to_energy(&mut self, energy: i32);
+    fn add_to_energy(&mut self, energy: i32) -> bool;
     fn set_position(&mut self, x: usize, y: usize);
     fn get_position(&self) -> (usize, usize);
-    fn take_other_action(&mut self){
-        match self.get_action_ref_immutable() {
+    // Return true = animal survived. Return false = animal died
+    fn take_action(&mut self, success: bool) -> bool {
+        if !success {
+            return self.add_to_energy(-1);
+        }
+        match self.get_action() {
             Action::WalkLeft | Action::WalkRight  | Action::WalkUp | Action::WalkDown => {
-                self.add_to_energy(-3);
+                self.add_to_energy(-3)
             }
             Action::Eat => {
-                panic!("Called take_other_action for a animal that wanted to eat");
+                self.add_to_energy(100)
             }
             Action::None => {
-                self.add_to_energy(-1);
+                self.add_to_energy(-1)
             }
         }
-    }
-    fn take_eat_action(&mut self){
-        self.add_to_energy(100);
     }
     fn generate_neuron_layers(input_count: usize, neuron_count: usize, neuron_layer_count: usize) -> Vec<Vec<Neuron>> {
         let mut neurons: Vec<Vec<Neuron>> = Vec::with_capacity(neuron_layer_count);

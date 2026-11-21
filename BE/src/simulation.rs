@@ -3,18 +3,17 @@ mod map;
 mod record;
 
 use map::Map;
-use config::*;
 use crate::simulation::record::GenerationRecording;
 
 pub struct Simulation {
     map: Map,
-    config: SimulationConfig,
+    config: config::SimulationConfig,
     generation: usize,
     recording: Vec<GenerationRecording>,
 }
 
 impl Simulation {
-    pub fn new(config: SimulationConfig) -> Simulation {
+    pub fn new(config: config::SimulationConfig) -> Simulation {
         Simulation {
             map: Map::new(config.map_config.clone()),
             config,
